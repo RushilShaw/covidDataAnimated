@@ -1,64 +1,60 @@
 import pandas as pd
-from matplotlib import pyplot as plt
-from datetime import date, timedelta
-
-
-DEATH_FACTOR = 50  # The factor at which deaths are scaled up at
-DEATHS_SHIFT = -14
-SMOOTHING_FACTOR = 14  # The amount of days the cases that are averaged
+import matplotlib.pyplot as plt
+from datetime import date
 
 
 def format_day(day):
-    """converts dates format to datetime.dates"""
+    """Converts date string to datetime.date object."""
     formatted_day = date.fromisoformat(day)
     return formatted_day
 
 
-def main():
+def main(deaths_shift, smoothing_factor):
+    """Generates and displays a graph of Covid deaths and cases."""
     df = pd.read_csv("us.csv")
+
+    # Convert date strings to datetime.date objects
     df["date"] = df["date"].apply(format_day)
 
-    new_cases = [0]
-    for index, case_count in enumerate(df["cases"][1:]):
-        new_cases.append(case_count - df["cases"][index])
-    df["daily_new_cases"] = new_cases
+    # Calculate daily new cases and 14-day rolling average
+    df["daily_new_cases"] = df["cases"].diff().fillna(0)
+    df["average_new_cases"] = df["daily_new_cases"].rolling(smoothing_factor).mean().fillna(0)
 
-    average_new_cases = [0] * (SMOOTHING_FACTOR - 1)
-    for index, case_count in enumerate(df["daily_new_cases"][SMOOTHING_FACTOR - 1:]):
-        average_new_cases.append(sum(df["daily_new_cases"][index: index + SMOOTHING_FACTOR]) / SMOOTHING_FACTOR)
-    df["average_new_cases"] = average_new_cases
+    # Calculate daily new deaths and 14-day rolling average with an offset
+    df["daily_new_deaths"] = df["deaths"].diff().fillna(0)
+    df["average_new_deaths"] = df["daily_new_deaths"].rolling(smoothing_factor).mean().fillna(0)
+    df["average_new_deaths"] = df["average_new_deaths"].shift(deaths_shift).fillna(0)
 
-    new_deaths = [0]
-    for index, death_count in enumerate(df["deaths"][1:]):
-        new_deaths.append(death_count - df["deaths"][index])
-    new_deaths = [item * DEATH_FACTOR for item in new_deaths]  # O(n) operation that can easily be removed
-    df["daily_deaths"] = new_deaths
+    # Plot the data on two y-axes
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
 
-    average_deaths = [0] * (SMOOTHING_FACTOR - 1)
-    for index, case_count in enumerate(df["daily_deaths"][SMOOTHING_FACTOR - 1:]):
-        average_deaths.append(sum(df["daily_deaths"][index: index + SMOOTHING_FACTOR]) / SMOOTHING_FACTOR)
-    df["average_deaths"] = average_deaths
+    ax1.plot(df["date"], df["average_new_cases"], "b-", label="Average Cases")
+    ax2.plot(df["date"], df["average_new_deaths"], "r-", label="Average Deaths")
 
-    # plt.plot(df["date"], df["daily_new_cases"], "o", label="Cases")
-    # plt.plot(df["date"], df["daily_deaths"], "-", label="Deaths")
-    plt.plot(df["date"], df["average_new_cases"], "-", label="CasesAverage")
-    plt.plot(df["date"] + timedelta(DEATHS_SHIFT), df["average_deaths"], "-", label="AverageDeaths")
+    # Add axis labels and legend
+    ax1.set_xlabel('Date of Cases')
+    ax1.set_ylabel('Cases', color='b')
+    ax2.set_ylabel('Deaths', color='r')
+    ax1.tick_params(axis='x', rotation=45)
+    ax1.legend(loc='upper left')
 
-    plt.title("Covid Data") 
-    plt.xlabel('Date')
-    plt.ylabel('Cases/Deaths')
-    plt.legend(loc='upper left')
+    # Show the graph
     plt.show()
 
 
 def animated_main():
-    global DEATH_FACTOR, DEATHS_SHIFT, SMOOTHING_FACTOR
-    DEATH_FACTOR = int(input("By what factor would you like to increase the amount of Deaths by: "))
-    DEATHS_SHIFT = int(input("How much would you like to shift the death dates of the x-axis: "))
-    SMOOTHING_FACTOR = int(input("How many days average would you like to use to smooth the graph: "))
+    """Allows user to input graph parameters interactively."""
+    while True:
+        try:
+            deaths_shift = int(input("How much would you like to shift the death dates of the x-axis? "))
+            smoothing_factor = int(input("How many days average would you like to use to smooth the graph? "))
+            break
+        except ValueError:
+            print("Invalid input. Please enter an integer.")
+
+    main(deaths_shift, smoothing_factor)
 
 
 if __name__ == '__main__':
-    if True:
-        animated_main()
-    main()
+    animated_main()
